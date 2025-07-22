@@ -1,0 +1,94 @@
+
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Anime Recommender</title>
+        <!-- Tailwind CSS CDN for easy styling -->
+        <script src="https://cdn.tailwindcss.com"></script>
+        <style>
+            /* Custom styles for Inter font and background */
+            body {
+                font-family: 'Inter', sans-serif;
+                background-color: #1a202c; /* Dark background */
+                color: #e2e8f0; /* Light text */
+            }
+            /* Custom scrollbar for better aesthetics */
+            ::-webkit-scrollbar {
+                width: 8px;
+            }
+            ::-webkit-scrollbar-track {
+                background: #2d3748; /* Darker track */
+                border-radius: 10px;
+            }
+            ::-webkit-scrollbar-thumb {
+                background: #4a5568; /* Lighter thumb */
+                border-radius: 10px;
+            }
+            ::-webkit-scrollbar-thumb:hover {
+                background: #6b7280; /* Even lighter on hover */
+            }
+        </style>
+    </head>
+    <body class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-gray-800 p-8 rounded-lg shadow-xl w-full max-w-2xl">
+            <h1 class="text-4xl font-bold text-center text-indigo-400 mb-6">
+                <span class="inline-block transform rotate-3 mr-2">🌟</span> Anime Recommender <span class="inline-block transform -rotate-3 ml-2">🎬</span>
+            </h1>
+            <p class="text-center text-gray-400 mb-8">
+                Discover new anime based on your favorites! Powered by Jikan API.
+            </p>
+
+            <form action="/recommend" method="post" class="mb-8 flex flex-col sm:flex-row gap-4">
+                <input type="text" name="anime_name" placeholder="Enter an anime you enjoy (e.g., Naruto)"
+                       class="flex-grow p-3 rounded-md bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-white placeholder-gray-400">
+                <button type="submit"
+                        class="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-800 transition duration-300 ease-in-out transform hover:scale-105">
+                    Get Recommendations
+                </button>
+            </form>
+
+            {% if message %}
+                <p class="text-center text-yellow-400 mb-6 font-medium">{{ message }}</p>
+            {% endif %}
+
+            {% if favorite_anime %}
+                <div class="mb-8 bg-gray-700 p-6 rounded-lg shadow-md">
+                    <h2 class="text-2xl font-semibold text-indigo-300 mb-4 flex items-center">
+                        <span class="mr-2">💖</span> Your Anime: {{ favorite_anime.title }}
+                    </h2>
+                    <p class="text-gray-300 mb-2">
+                        <span class="font-semibold text-gray-200">Score:</span> {{ favorite_anime.score if favorite_anime.score else 'N/A' }}
+                    </p>
+                    <p class="text-gray-300 mb-4">
+                        <span class="font-semibold text-gray-200">Genres:</span>
+                        {% for genre in favorite_anime.genres %}
+                            <span class="inline-block bg-indigo-700 text-indigo-100 text-xs px-2 py-1 rounded-full mr-1 mb-1">{{ genre.name }}</span>
+                        {% endfor %}
+                    </p>
+                    <p class="text-gray-400 text-sm leading-relaxed">
+                        <span class="font-semibold text-gray-200">Synopsis:</span> {{ favorite_anime.synopsis[:250] }}...
+                        <a href="{{ favorite_anime.url }}" target="_blank" class="text-indigo-400 hover:underline">Read more</a>
+                    </p>
+                </div>
+            {% endif %}
+
+            {% if recommendations %}
+                <div class="bg-gray-700 p-6 rounded-lg shadow-md">
+                    <h2 class="text-2xl font-semibold text-green-300 mb-4 flex items-center">
+                        <span class="mr-2">✨</span> Recommended Anime:
+                    </h2>
+                    <ul class="list-disc list-inside text-gray-300 space-y-2">
+                        {% for rec_title in recommendations %}
+                            <li class="flex items-center">
+                                <span class="text-green-400 mr-2">•</span> {{ rec_title }}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+        </div>
+    </body>
+    </html>
+    
