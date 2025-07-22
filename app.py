@@ -1,12 +1,52 @@
+# app.py
 from flask import Flask, render_template, request, jsonify
 import requests
 import json
 import os
+import time # For adding a small delay to respect API rate limits
 
 app = Flask(__name__)
 
 # Base URL for the Jikan API
 JIKAN_API_URL = "https://api.jikan.moe/v4"
+
+# Global variable to store genre map (initialized once)
+# This avoids fetching the genre list repeatedly
+GENRE_NAME_TO_ID_MAP = {}
+
+def get_genre_map():
+    """
+    Fetches all anime genres from Jikan API and creates a name-to-ID map.
+    This helps in accurate genre-based filtering.
+    """
+    global GENRE_NAME_TO_ID_MAP
+    if GENRE_NAME_TO_ID_MAP: # If already populated, return it
+        return GENRE_NAME_TO_ID_MAP
+
+    print("Fetching anime genre list...")
+    genre_api_url = f"{JIKAN_API_URL}/genres/anime"
+    try:
+        response = requests.get(genre_api_url)
+        response.raise_for_status()
+        data = response.json()
+
+        if data and data.get('data'):
+            for genre in data['data']:
+                GENRE_NAME_TO_ID_MAP[genre['name'].lower()] = genre['mal_id']
+            print(f"Successfully fetched {len(GENRE_NAME_TO_ID_MAP)} genres.")
+            return GENRE_NAME_TO_ID_MAP
+        else:
+            print("No genre data found from API.")
+            return {}
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching genre list from Jikan API: {e}")
+        return {}
+    except json.JSONDecodeError:
+        print("Error decoding JSON response for genres from API.")
+        return {}
+    except Exception as e:
+        print(f"An unexpected error occurred while fetching genres: {e}")
+        return {}
 
 def get_anime_data(search_query):
     """
@@ -18,7 +58,7 @@ def get_anime_data(search_query):
     Returns:
         dict: A dictionary containing anime data if found, otherwise None.
     """
-    api_url = f"{JIKAN_API_URL}/anime?q={search_query}&limit=5"
+    api_url = f"{JIKAN_API_URL}/anime?q={search_query}&limit=10"
     print(f"Searching for anime: '{search_query}'...")
 
     try:
@@ -42,31 +82,52 @@ def get_anime_data(search_query):
         print(f"An unexpected error occurred: {e}")
         return None
 
-def recommend_anime_by_genre(anime_genres, num_recommendations=5):
+def recommend_anime_by_genre(favorite_anime_genre_names, num_recommendations=10):
     """
-    Recommends anime based on shared genres.
-    This is a very basic content-based recommendation system.
+    Recommends anime based on shared genres using genre IDs for better accuracy.
 
     Args:
-        anime_genres (list): A list of genres from the user's favorite anime.
+        favorite_anime_genre_names (list): A list of genre names from the user's favorite anime.
         num_recommendations (int): The number of recommendations to provide.
 
     Returns:
-        list: A list of recommended anime titles.
+        list: A list of recommended anime titles, sorted by genre overlap.
     """
-    if not anime_genres:
+    if not favorite_anime_genre_names:
         return []
 
-    print(f"\nLooking for anime similar to genres: {', '.join(anime_genres)}")
-    recommended_titles = []
-    seen_anime_ids = set() # To avoid recommending the same anime multiple times
+    genre_map = get_genre_map()
+    if not genre_map:
+        print("Cannot recommend: Genre map not available.")
+        return []
 
-    # Iterate through each genre to find related anime
-    for genre in anime_genres:
-        # Fetch anime by genre name (simplified approach for beginner project)
-        # In a real application, you'd get genre IDs and use the /anime?genres={id} endpoint
-        search_url = f"{JIKAN_API_URL}/anime?q={genre}&order_by=score&sort=desc&limit=20"
+    # Convert favorite anime genre names to their corresponding IDs
+    favorite_anime_genre_ids = [
+        genre_map[g.lower()] for g in favorite_anime_genre_names if g.lower() in genre_map
+    ]
 
+    if not favorite_anime_genre_ids:
+        print("No valid genre IDs found for your favorite anime.")
+        return []
+
+    print(f"\nLooking for anime similar to genres (IDs): {favorite_anime_genre_ids}")
+    
+    # Use a dictionary to store potential recommendations with their genre overlap count
+    # {anime_id: {'title': 'Anime Title', 'overlap_count': X}}
+    potential_recommendations = {}
+    
+    # To avoid hitting rate limits, we'll fetch a broad list and then filter/score
+    # We can query by multiple genre IDs (comma-separated) for a more targeted search
+    # However, Jikan's /anime endpoint only takes one genre ID at a time in the 'genres' parameter.
+    # So, we'll iterate through the top genres and combine results.
+
+    # Prioritize searching by the most relevant genres first (e.g., first 3-5)
+    genres_to_query = favorite_anime_genre_ids[:7] # Limit to top few genres for API calls
+
+    for genre_id in genres_to_query:
+        # Search for anime by specific genre ID, ordered by score
+        search_url = f"{JIKAN_API_URL}/anime?genres={genre_id}&order_by=score&sort=desc&limit=25"
+        
         try:
             response = requests.get(search_url)
             response.raise_for_status()
@@ -74,28 +135,50 @@ def recommend_anime_by_genre(anime_genres, num_recommendations=5):
 
             if data and data.get('data'):
                 for anime in data['data']:
-                    anime_genres_list = [g['name'] for g in anime.get('genres', [])]
-                    if any(g in anime_genres_list for g in anime_genres):
-                        if anime['mal_id'] not in seen_anime_ids:
-                            recommended_titles.append(anime['title'])
-                            seen_anime_ids.add(anime['mal_id'])
-                            if len(recommended_titles) >= num_recommendations:
-                                return recommended_titles # Return once enough recommendations are found
+                    anime_id = anime['mal_id']
+                    if anime_id in potential_recommendations:
+                        continue # Already processed this anime
 
+                    # Get genres of the current anime being considered
+                    current_anime_genres = [g['mal_id'] for g in anime.get('genres', [])]
+                    
+                    # Calculate genre overlap with the user's favorite anime's genres
+                    overlap_count = len(set(favorite_anime_genre_ids).intersection(current_anime_genres))
+
+                    if overlap_count > 0: # Only consider if there's at least one shared genre
+                        potential_recommendations[anime_id] = {
+                            'title': anime['title'],
+                            'overlap_count': overlap_count,
+                            'score': anime.get('score', 0) # Include score for secondary sorting
+                        }
+            time.sleep(0.5) # Be kind to the API, add a small delay between requests
         except requests.exceptions.RequestException as e:
-            print(f"Error fetching genre-based recommendations: {e}")
+            print(f"Error fetching genre-based recommendations for genre ID {genre_id}: {e}")
         except json.JSONDecodeError:
-            print("Error decoding JSON for genre recommendations.")
+            print(f"Error decoding JSON for genre ID {genre_id} recommendations.")
         except Exception as e:
-            print(f"An unexpected error occurred during genre recommendation: {e}")
+            print(f"An unexpected error occurred during genre recommendation for genre ID {genre_id}: {e}")
 
-    return recommended_titles[:num_recommendations] # Ensure we don't return more than requested
+    # Sort potential recommendations:
+    # 1. By overlap count (descending)
+    # 2. By score (descending)
+    sorted_recommendations = sorted(
+        potential_recommendations.values(),
+        key=lambda x: (x['overlap_count'], x['score']),
+        reverse=True
+    )
+
+    # Extract titles up to the requested number of recommendations
+    recommended_titles = [rec['title'] for rec in sorted_recommendations[:num_recommendations]]
+    return recommended_titles
 
 @app.route('/', methods=['GET'])
 def index():
     """
     Renders the main page of the application.
     """
+    # Ensure genre map is loaded when the app starts or index page is accessed
+    get_genre_map()
     return render_template('index.html',
                            favorite_anime=None,
                            recommendations=None,
@@ -117,8 +200,11 @@ def recommend():
         favorite_anime_data = get_anime_data(user_anime_name)
 
         if favorite_anime_data:
+            # Extract genre names (strings) from the favorite anime data
             genres = [genre['name'] for genre in favorite_anime_data.get('genres', [])]
+            
             if genres:
+                # Pass genre names to the recommendation function
                 recommendations = recommend_anime_by_genre(genres, num_recommendations=5)
                 if not recommendations:
                     message = "Could not find suitable recommendations based on your anime's genres."
@@ -134,7 +220,6 @@ def recommend():
 
 if __name__ == '__main__':
     # Create the 'templates' directory if it doesn't exist
-    # This ensures the Flask app can find the HTML template.
     templates_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates')
     os.makedirs(templates_dir, exist_ok=True)
 
@@ -152,8 +237,10 @@ if __name__ == '__main__':
             /* Custom styles for Inter font and background */
             body {
                 font-family: 'Inter', sans-serif;
-                background-color: #1a202c; /* Dark background */
-                color: #e2e8f0; /* Light text */
+                background-color: #0d1117; /* Darker background, GitHub-like */
+                color: #c9d1d9; /* Lighter text for contrast */
+                background-image: radial-gradient(at 0% 0%, hsla(215, 80%, 20%, 0.3) 0, transparent 50%),
+                                  radial-gradient(at 100% 100%, hsla(280, 80%, 20%, 0.3) 0, transparent 50%);
             }
             /* Custom scrollbar for better aesthetics */
             ::-webkit-scrollbar {
@@ -170,60 +257,70 @@ if __name__ == '__main__':
             ::-webkit-scrollbar-thumb:hover {
                 background: #6b7280; /* Even lighter on hover */
             }
+            /* Keyframe for subtle pulse animation on button */
+            @keyframes pulse-once {
+                0% { transform: scale(1); }
+                50% { transform: scale(1.02); }
+                100% { transform: scale(1); }
+            }
+            .animate-pulse-once {
+                animation: pulse-once 0.5s ease-in-out;
+            }
         </style>
     </head>
     <body class="flex items-center justify-center min-h-screen p-4">
-        <div class="bg-gray-800 p-8 rounded-lg shadow-xl w-full max-w-2xl">
-            <h1 class="text-4xl font-bold text-center text-indigo-400 mb-6">
-                <span class="inline-block transform rotate-3 mr-2">🌟</span> Anime Recommender <span class="inline-block transform -rotate-3 ml-2">🎬</span>
+        <div class="bg-gray-900 bg-opacity-80 backdrop-blur-sm p-8 rounded-xl shadow-2xl w-full max-w-2xl border border-gray-700">
+            <h1 class="text-5xl font-extrabold text-center text-purple-400 mb-4 animate-fade-in-down">
+                <span class="inline-block transform rotate-6 mr-3 text-yellow-300">✨</span> Anime Nexus <span class="inline-block transform -rotate-6 ml-3 text-pink-300">🌌</span>
             </h1>
-            <p class="text-center text-gray-400 mb-8">
-                Discover new anime based on your favorites! Powered by Jikan API.
+            <p class="text-center text-gray-400 text-lg mb-8">
+                Your gateway to discovering new anime. 
             </p>
 
-            <form action="/recommend" method="post" class="mb-8 flex flex-col sm:flex-row gap-4">
-                <input type="text" name="anime_name" placeholder="Enter an anime you enjoy (e.g., Naruto)"
-                       class="flex-grow p-3 rounded-md bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-white placeholder-gray-400">
+            <form action="/recommend" method="post" class="mb-10 flex flex-col sm:flex-row gap-4">
+                <input type="text" name="anime_name" placeholder="Enter an anime you love (e.g.One Piece)"
+                       class="flex-grow p-4 rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:ring-3 focus:ring-purple-500 text-white placeholder-gray-400 text-lg transition duration-300 ease-in-out">
                 <button type="submit"
-                        class="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-800 transition duration-300 ease-in-out transform hover:scale-105">
-                    Get Recommendations
+                        class="px-8 py-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-lg shadow-lg hover:shadow-xl focus:outline-none focus:ring-3 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-gray-900 transition duration-300 ease-in-out transform hover:scale-105 active:scale-95 animate-pulse-once">
+                    Find My Next Anime!
                 </button>
             </form>
 
             {% if message %}
-                <p class="text-center text-yellow-400 mb-6 font-medium">{{ message }}</p>
+                <p class="text-center text-yellow-300 mb-8 text-xl font-semibold bg-gray-800 p-3 rounded-md border border-yellow-500">{{ message }}</p>
             {% endif %}
 
             {% if favorite_anime %}
-                <div class="mb-8 bg-gray-700 p-6 rounded-lg shadow-md">
-                    <h2 class="text-2xl font-semibold text-indigo-300 mb-4 flex items-center">
-                        <span class="mr-2">💖</span> Your Anime: {{ favorite_anime.title }}
+                <div class="mb-8 bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700 transform transition duration-300 hover:scale-[1.01]">
+                    <h2 class="text-3xl font-bold text-purple-300 mb-4 flex items-center">
+                        <span class="mr-3 text-pink-400">💖</span> Your Anime: {{ favorite_anime.title }}
                     </h2>
-                    <p class="text-gray-300 mb-2">
-                        <span class="font-semibold text-gray-200">Score:</span> {{ favorite_anime.score if favorite_anime.score else 'N/A' }}
+                    <p class="text-gray-300 text-lg mb-2">
+                        <span class="font-semibold text-gray-200">Score:</span>
+                        <span class="text-yellow-400">{{ favorite_anime.score if favorite_anime.score else 'N/A' }}</span>
                     </p>
-                    <p class="text-gray-300 mb-4">
-                        <span class="font-semibold text-gray-200">Genres:</span>
+                    <div class="mb-4 flex flex-wrap gap-2">
+                        <span class="font-semibold text-gray-200 text-lg">Genres:</span>
                         {% for genre in favorite_anime.genres %}
-                            <span class="inline-block bg-indigo-700 text-indigo-100 text-xs px-2 py-1 rounded-full mr-1 mb-1">{{ genre.name }}</span>
+                            <span class="inline-block bg-purple-700 text-purple-100 text-sm px-3 py-1 rounded-full shadow-md">{{ genre.name }}</span>
                         {% endfor %}
-                    </p>
-                    <p class="text-gray-400 text-sm leading-relaxed">
+                    </div>
+                    <p class="text-gray-400 text-base leading-relaxed">
                         <span class="font-semibold text-gray-200">Synopsis:</span> {{ favorite_anime.synopsis[:250] }}...
-                        <a href="{{ favorite_anime.url }}" target="_blank" class="text-indigo-400 hover:underline">Read more</a>
+                        <a href="{{ favorite_anime.url }}" target="_blank" class="text-purple-400 hover:underline font-medium">Read more on MyAnimeList</a>
                     </p>
                 </div>
             {% endif %}
 
             {% if recommendations %}
-                <div class="bg-gray-700 p-6 rounded-lg shadow-md">
-                    <h2 class="text-2xl font-semibold text-green-300 mb-4 flex items-center">
-                        <span class="mr-2">✨</span> Recommended Anime:
+                <div class="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700 transform transition duration-300 hover:scale-[1.01]">
+                    <h2 class="text-3xl font-bold text-green-300 mb-4 flex items-center">
+                        <span class="mr-3 text-cyan-400">✨</span> Recommended for You:
                     </h2>
-                    <ul class="list-disc list-inside text-gray-300 space-y-2">
+                    <ul class="list-none text-gray-300 space-y-3">
                         {% for rec_title in recommendations %}
-                            <li class="flex items-center">
-                                <span class="text-green-400 mr-2">•</span> {{ rec_title }}
+                            <li class="flex items-center bg-gray-700 p-3 rounded-md shadow-sm border border-gray-600">
+                                <span class="text-green-400 mr-3 text-xl font-bold">»</span> {{ rec_title }}
                             </li>
                         {% endfor %}
                     </ul>
@@ -238,6 +335,8 @@ if __name__ == '__main__':
     with open(os.path.join(templates_dir, 'index.html'), 'w', encoding='utf-8') as f:
         f.write(index_html_content)
 
+    # Initialize the genre map when the app starts
+    get_genre_map()
+
     # Run the Flask application
-    # debug=True allows for automatic reloading on code changes and provides a debugger.
     app.run(debug=True)

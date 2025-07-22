@@ -11,8 +11,10 @@
             /* Custom styles for Inter font and background */
             body {
                 font-family: 'Inter', sans-serif;
-                background-color: #1a202c; /* Dark background */
-                color: #e2e8f0; /* Light text */
+                background-color: #0d1117; /* Darker background, GitHub-like */
+                color: #c9d1d9; /* Lighter text for contrast */
+                background-image: radial-gradient(at 0% 0%, hsla(215, 80%, 20%, 0.3) 0, transparent 50%),
+                                  radial-gradient(at 100% 100%, hsla(280, 80%, 20%, 0.3) 0, transparent 50%);
             }
             /* Custom scrollbar for better aesthetics */
             ::-webkit-scrollbar {
@@ -29,60 +31,70 @@
             ::-webkit-scrollbar-thumb:hover {
                 background: #6b7280; /* Even lighter on hover */
             }
+            /* Keyframe for subtle pulse animation on button */
+            @keyframes pulse-once {
+                0% { transform: scale(1); }
+                50% { transform: scale(1.02); }
+                100% { transform: scale(1); }
+            }
+            .animate-pulse-once {
+                animation: pulse-once 0.5s ease-in-out;
+            }
         </style>
     </head>
     <body class="flex items-center justify-center min-h-screen p-4">
-        <div class="bg-gray-800 p-8 rounded-lg shadow-xl w-full max-w-2xl">
-            <h1 class="text-4xl font-bold text-center text-indigo-400 mb-6">
-                <span class="inline-block transform rotate-3 mr-2">🌟</span> Anime Recommender <span class="inline-block transform -rotate-3 ml-2">🎬</span>
+        <div class="bg-gray-900 bg-opacity-80 backdrop-blur-sm p-8 rounded-xl shadow-2xl w-full max-w-2xl border border-gray-700">
+            <h1 class="text-5xl font-extrabold text-center text-purple-400 mb-4 animate-fade-in-down">
+                <span class="inline-block transform rotate-6 mr-3 text-yellow-300">✨</span> Anime Nexus <span class="inline-block transform -rotate-6 ml-3 text-pink-300">🌌</span>
             </h1>
-            <p class="text-center text-gray-400 mb-8">
-                Discover new anime based on your favorites! Powered by Jikan API.
+            <p class="text-center text-gray-400 text-lg mb-8">
+                Your gateway to discovering new anime. 
             </p>
 
-            <form action="/recommend" method="post" class="mb-8 flex flex-col sm:flex-row gap-4">
-                <input type="text" name="anime_name" placeholder="Enter an anime you enjoy (e.g., Naruto)"
-                       class="flex-grow p-3 rounded-md bg-gray-700 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-white placeholder-gray-400">
+            <form action="/recommend" method="post" class="mb-10 flex flex-col sm:flex-row gap-4">
+                <input type="text" name="anime_name" placeholder="Enter an anime you love (e.g.One Piece)"
+                       class="flex-grow p-4 rounded-lg bg-gray-700 border border-gray-600 focus:outline-none focus:ring-3 focus:ring-purple-500 text-white placeholder-gray-400 text-lg transition duration-300 ease-in-out">
                 <button type="submit"
-                        class="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-800 transition duration-300 ease-in-out transform hover:scale-105">
-                    Get Recommendations
+                        class="px-8 py-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-lg shadow-lg hover:shadow-xl focus:outline-none focus:ring-3 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-gray-900 transition duration-300 ease-in-out transform hover:scale-105 active:scale-95 animate-pulse-once">
+                    Find My Next Anime!
                 </button>
             </form>
 
             {% if message %}
-                <p class="text-center text-yellow-400 mb-6 font-medium">{{ message }}</p>
+                <p class="text-center text-yellow-300 mb-8 text-xl font-semibold bg-gray-800 p-3 rounded-md border border-yellow-500">{{ message }}</p>
             {% endif %}
 
             {% if favorite_anime %}
-                <div class="mb-8 bg-gray-700 p-6 rounded-lg shadow-md">
-                    <h2 class="text-2xl font-semibold text-indigo-300 mb-4 flex items-center">
-                        <span class="mr-2">💖</span> Your Anime: {{ favorite_anime.title }}
+                <div class="mb-8 bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700 transform transition duration-300 hover:scale-[1.01]">
+                    <h2 class="text-3xl font-bold text-purple-300 mb-4 flex items-center">
+                        <span class="mr-3 text-pink-400">💖</span> Your Anime: {{ favorite_anime.title }}
                     </h2>
-                    <p class="text-gray-300 mb-2">
-                        <span class="font-semibold text-gray-200">Score:</span> {{ favorite_anime.score if favorite_anime.score else 'N/A' }}
+                    <p class="text-gray-300 text-lg mb-2">
+                        <span class="font-semibold text-gray-200">Score:</span>
+                        <span class="text-yellow-400">{{ favorite_anime.score if favorite_anime.score else 'N/A' }}</span>
                     </p>
-                    <p class="text-gray-300 mb-4">
-                        <span class="font-semibold text-gray-200">Genres:</span>
+                    <div class="mb-4 flex flex-wrap gap-2">
+                        <span class="font-semibold text-gray-200 text-lg">Genres:</span>
                         {% for genre in favorite_anime.genres %}
-                            <span class="inline-block bg-indigo-700 text-indigo-100 text-xs px-2 py-1 rounded-full mr-1 mb-1">{{ genre.name }}</span>
+                            <span class="inline-block bg-purple-700 text-purple-100 text-sm px-3 py-1 rounded-full shadow-md">{{ genre.name }}</span>
                         {% endfor %}
-                    </p>
-                    <p class="text-gray-400 text-sm leading-relaxed">
+                    </div>
+                    <p class="text-gray-400 text-base leading-relaxed">
                         <span class="font-semibold text-gray-200">Synopsis:</span> {{ favorite_anime.synopsis[:250] }}...
-                        <a href="{{ favorite_anime.url }}" target="_blank" class="text-indigo-400 hover:underline">Read more</a>
+                        <a href="{{ favorite_anime.url }}" target="_blank" class="text-purple-400 hover:underline font-medium">Read more on MyAnimeList</a>
                     </p>
                 </div>
             {% endif %}
 
             {% if recommendations %}
-                <div class="bg-gray-700 p-6 rounded-lg shadow-md">
-                    <h2 class="text-2xl font-semibold text-green-300 mb-4 flex items-center">
-                        <span class="mr-2">✨</span> Recommended Anime:
+                <div class="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700 transform transition duration-300 hover:scale-[1.01]">
+                    <h2 class="text-3xl font-bold text-green-300 mb-4 flex items-center">
+                        <span class="mr-3 text-cyan-400">✨</span> Recommended for You:
                     </h2>
-                    <ul class="list-disc list-inside text-gray-300 space-y-2">
+                    <ul class="list-none text-gray-300 space-y-3">
                         {% for rec_title in recommendations %}
-                            <li class="flex items-center">
-                                <span class="text-green-400 mr-2">•</span> {{ rec_title }}
+                            <li class="flex items-center bg-gray-700 p-3 rounded-md shadow-sm border border-gray-600">
+                                <span class="text-green-400 mr-3 text-xl font-bold">»</span> {{ rec_title }}
                             </li>
                         {% endfor %}
                     </ul>
