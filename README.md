@@ -1,4 +1,3 @@
-
 # Anime Nexus: Intelligent Anime Recommendation System
 
 Anime Nexus is a modern web application built with Python Flask that provides personalized anime recommendations. It intelligently suggests new anime titles by analyzing genres of a user's favorite anime and leveraging the Jikan API (an unofficial MyAnimeList API) for comprehensive data retrieval. The application features a sleek, responsive user interface designed with Tailwind CSS, enhancing user experience and showcasing full-stack development capabilities.
@@ -46,3 +45,12 @@ Jikan API (Unofficial MyAnimeList API: https://jikan.moe/)
 - Search Autocomplete
 
 - User Ratings
+
+## Demo: https://anime-recommender-app.onrender.com
+
+## Snapsshots: 
+
+<img width="1361" height="602" alt="image" src="https://github.com/user-attachments/assets/67ae57ae-3035-4d7d-b32c-cf028a65d94c" />
+
+<img width="441" height="520" alt="image" src="https://github.com/user-attachments/assets/a2d5a5df-ebe9-4c15-96ea-857566fd700b" />
+
