@@ -52,7 +52,7 @@ Jikan API (Unofficial MyAnimeList API: https://jikan.moe/)
 
 <img width="1361" height="602" alt="image" src="https://github.com/user-attachments/assets/67ae57ae-3035-4d7d-b32c-cf028a65d94c" />
 
-<img width="450" height="520" alt="image" src="https://github.com/user-attachments/assets/a2d5a5df-ebe9-4c15-96ea-857566fd700b" />
+<img style="margin-left: 50px;" width="450" height="520" alt="image" src="https://github.com/user-attachments/assets/a2d5a5df-ebe9-4c15-96ea-857566fd700b" />
 <img width="450" height="520" alt="image" src="https://github.com/user-attachments/assets/b0e712cf-a52a-46d3-832d-7d0f0a15bca4" />
 
 
